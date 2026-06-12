@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cloud AI Robot Vision Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="hero-card">
+      <div>
+        <p class="eyebrow">AI & Robotics • Azure-ready</p>
+        <h1>Cloud AI Robot Vision Dashboard</h1>
+        <p class="subtitle">A practical prototype for monitoring robot perception, cloud inference, and live object detection in one place.</p>
+      </div>
+      <div class="hero-badge">
+        <span>Live</span>
+        <strong id="clock">--:--:--</strong>
+        <small>Simulation mode</small>
+      </div>
+    </header>
+
+    <section class="metrics-grid">
+      <article class="metric-card accent-cyan">
+        <p>Inference latency</p>
+        <h2 id="latency">18 ms</h2>
+        <span>Average cloud AI response</span>
+      </article>
+      <article class="metric-card accent-green">
+        <p>Objects detected</p>
+        <h2 id="objects">0</h2>
+        <span>Tracked by the vision model</span>
+      </article>
+      <article class="metric-card accent-purple">
+        <p>Robot battery</p>
+        <h2 id="battery">92%</h2>
+        <span>Autonomous mobile unit</span>
+      </article>
+      <article class="metric-card accent-amber">
+        <p>Cloud uptime</p>
+        <h2>99.98%</h2>
+        <span>Azure-style reliability target</span>
+      </article>
+    </section>
+
+    <main class="dashboard-grid">
+      <section class="panel camera-panel">
+        <div class="panel-header">
+          <div>
+            <p class="panel-label">Vision feed</p>
+            <h3>Robot camera view</h3>
+          </div>
+          <span class="status-pill online">Online</span>
+        </div>
+
+        <div class="camera-stage">
+          <div class="camera-overlay">
+            <span class="chip">AI model: YOLOv8-lite</span>
+            <span class="chip">Mode: Edge + Cloud</span>
+          </div>
+          <div class="camera-grid"></div>
+          <div class="target-box" id="targetBox">Object detected</div>
+        </div>
+
+        <div class="camera-footer">
+          <div>
+            <strong>Current task</strong>
+            <p id="taskLabel">Scanning corridor for pallets and obstacles.</p>
+          </div>
+          <button type="button">Sync cloud model</button>
+        </div>
+      </section>
+
+      <section class="panel insights-panel">
+        <div class="panel-header">
+          <div>
+            <p class="panel-label">AI insights</p>
+            <h3>Detection summary</h3>
+          </div>
+          <span class="status-pill neutral">Updated live</span>
+        </div>
+
+        <ul id="detectionsList" class="detection-list"></ul>
+
+        <div class="mini-card">
+          <strong>Prediction confidence</strong>
+          <div class="progress-track"><div id="confidenceBar" class="progress-fill"></div></div>
+          <p id="confidenceText">89% confidence in current scene.</p>
+        </div>
+
+        <div class="mini-card">
+          <strong>Robot health</strong>
+          <ul class="health-list">
+            <li>Camera calibration: OK</li>
+            <li>Navigation planner: Stable</li>
+            <li>Wi-Fi link: Strong</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="panel action-panel">
+        <div class="panel-header">
+          <div>
+            <p class="panel-label">Automation</p>
+            <h3>Cloud command queue</h3>
+          </div>
+          <span class="status-pill ready">Ready</span>
+        </div>
+
+        <ul id="commandLog" class="log-list"></ul>
+      </section>
+
+      <section class="panel notes-panel">
+        <div class="panel-header">
+          <div>
+            <p class="panel-label">Architecture</p>
+            <h3>How this dashboard fits the cloud AI stack</h3>
+          </div>
+        </div>
+
+        <ol class="architecture-list">
+          <li>Camera input streams from the robot or simulator.</li>
+          <li>AI model performs image classification and object detection.</li>
+          <li>Azure-style cloud services store telemetry, metrics, and alerts.</li>
+          <li>The dashboard presents live status, confidence, and automation results.</li>
+        </ol>
+
+        <div class="tip-box">
+          <strong>Next step:</strong> connect this prototype to a real camera stream, Azure Blob Storage, and an inference API.
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
