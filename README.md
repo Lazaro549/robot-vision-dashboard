@@ -1,5 +1,5 @@
 # Cloud AI Robot Vision Dashboard
-![](Logo.png)
+
 A simple prototype dashboard for a cloud-ready AI + robotics vision interface.
 
 ## Features
