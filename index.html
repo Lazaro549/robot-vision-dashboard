@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cloud AI Robot Vision Dashboard</title>
+  <meta name="description" content="Browser-based robot vision dashboard with real-time object detection, tracking, telemetry, and performance metrics." />
+  <title>Robot Vision System | AI & Robotics</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -13,37 +14,51 @@
   <div class="app-shell">
     <header class="hero-card">
       <div>
-        <p class="eyebrow">AI & Robotics • Azure-ready</p>
-        <h1>Cloud AI Robot Vision Dashboard</h1>
-        <p class="subtitle">A practical prototype for monitoring robot perception, cloud inference, and live object detection in one place.</p>
+        <p class="eyebrow">AI & Robotics • Computer Vision</p>
+        <h1>Robot Vision System</h1>
+        <p class="subtitle">A reproducible perception demo: camera or video input → object detection → lightweight tracking → robot telemetry → live dashboard.</p>
       </div>
       <div class="hero-badge">
-        <span>Live</span>
+        <span id="systemStatus">Ready</span>
         <strong id="clock">--:--:--</strong>
-        <small>Simulation mode</small>
+        <small id="modeLabel">Awaiting video input</small>
       </div>
     </header>
+
+    <section class="control-bar panel">
+      <div class="control-copy">
+        <p class="panel-label">Perception input</p>
+        <h3>Run the vision pipeline</h3>
+        <p>Use your webcam or load a local video. Detection runs in the browser with COCO-SSD; no API key is required.</p>
+      </div>
+      <div class="controls">
+        <button id="cameraButton" type="button">Start camera</button>
+        <label class="file-button" for="videoInput">Load video</label>
+        <input id="videoInput" type="file" accept="video/*" hidden />
+        <button id="stopButton" type="button" class="secondary" disabled>Stop</button>
+      </div>
+    </section>
 
     <section class="metrics-grid">
       <article class="metric-card accent-cyan">
         <p>Inference latency</p>
-        <h2 id="latency">18 ms</h2>
-        <span>Average cloud AI response</span>
+        <h2 id="latency">-- ms</h2>
+        <span>Model inference per processed frame</span>
       </article>
       <article class="metric-card accent-green">
         <p>Objects detected</p>
         <h2 id="objects">0</h2>
-        <span>Tracked by the vision model</span>
+        <span>Objects in the latest frame</span>
       </article>
       <article class="metric-card accent-purple">
-        <p>Robot battery</p>
-        <h2 id="battery">92%</h2>
-        <span>Autonomous mobile unit</span>
+        <p>Tracked objects</p>
+        <h2 id="tracked">0</h2>
+        <span>Lightweight centroid tracking</span>
       </article>
       <article class="metric-card accent-amber">
-        <p>Cloud uptime</p>
-        <h2>99.98%</h2>
-        <span>Azure-style reliability target</span>
+        <p>Pipeline FPS</p>
+        <h2 id="fps">0</h2>
+        <span>Processed frames per second</span>
       </article>
     </section>
 
@@ -54,24 +69,30 @@
             <p class="panel-label">Vision feed</p>
             <h3>Robot camera view</h3>
           </div>
-          <span class="status-pill online">Online</span>
+          <span id="feedStatus" class="status-pill neutral">Offline</span>
         </div>
 
-        <div class="camera-stage">
-          <div class="camera-overlay">
-            <span class="chip">AI model: YOLOv8-lite</span>
-            <span class="chip">Mode: Edge + Cloud</span>
+        <div class="camera-stage" id="cameraStage">
+          <video id="video" autoplay muted playsinline></video>
+          <canvas id="overlay"></canvas>
+          <div id="emptyState" class="empty-state">
+            <div class="empty-icon">◉</div>
+            <strong>Start a camera or load a video</strong>
+            <span>The detection overlay will appear here.</span>
           </div>
-          <div class="camera-grid"></div>
-          <div class="target-box" id="targetBox">Object detected</div>
+          <div class="camera-overlay">
+            <span class="chip">Model: COCO-SSD</span>
+            <span class="chip">Tracking: Centroid</span>
+            <span id="inputChip" class="chip">Input: None</span>
+          </div>
         </div>
 
         <div class="camera-footer">
           <div>
             <strong>Current task</strong>
-            <p id="taskLabel">Scanning corridor for pallets and obstacles.</p>
+            <p id="taskLabel">Waiting for perception input.</p>
           </div>
-          <button type="button">Sync cloud model</button>
+          <button id="snapshotButton" type="button" class="secondary" disabled>Capture snapshot</button>
         </div>
       </section>
 
@@ -81,23 +102,25 @@
             <p class="panel-label">AI insights</p>
             <h3>Detection summary</h3>
           </div>
-          <span class="status-pill neutral">Updated live</span>
+          <span id="modelStatus" class="status-pill neutral">Model idle</span>
         </div>
 
-        <ul id="detectionsList" class="detection-list"></ul>
+        <ul id="detectionsList" class="detection-list">
+          <li>No detections yet.</li>
+        </ul>
 
         <div class="mini-card">
-          <strong>Prediction confidence</strong>
+          <strong>Average confidence</strong>
           <div class="progress-track"><div id="confidenceBar" class="progress-fill"></div></div>
-          <p id="confidenceText">89% confidence in current scene.</p>
+          <p id="confidenceText">Run the pipeline to calculate confidence.</p>
         </div>
 
         <div class="mini-card">
-          <strong>Robot health</strong>
+          <strong>Robot telemetry</strong>
           <ul class="health-list">
-            <li>Camera calibration: OK</li>
-            <li>Navigation planner: Stable</li>
-            <li>Wi-Fi link: Strong</li>
+            <li>Battery: <span id="battery">92%</span></li>
+            <li>Wheel odometry: <span id="odometry">12.4 m</span></li>
+            <li>Network link: <span id="network">Ready</span></li>
           </ul>
         </div>
       </section>
@@ -105,37 +128,50 @@
       <section class="panel action-panel">
         <div class="panel-header">
           <div>
-            <p class="panel-label">Automation</p>
-            <h3>Cloud command queue</h3>
+            <p class="panel-label">Observability</p>
+            <h3>Pipeline event log</h3>
           </div>
-          <span class="status-pill ready">Ready</span>
+          <span id="queueStatus" class="status-pill ready">Ready</span>
         </div>
-
-        <ul id="commandLog" class="log-list"></ul>
+        <ul id="commandLog" class="log-list">
+          <li>System initialized.</li>
+          <li>Waiting for camera or video input.</li>
+        </ul>
       </section>
 
       <section class="panel notes-panel">
         <div class="panel-header">
           <div>
             <p class="panel-label">Architecture</p>
-            <h3>How this dashboard fits the cloud AI stack</h3>
+            <h3>Perception pipeline</h3>
           </div>
         </div>
 
+        <div class="pipeline" aria-label="Vision pipeline">
+          <span>Camera / Video</span><b>→</b><span>Preprocess</span><b>→</b><span>COCO-SSD</span><b>→</b><span>Tracking</span><b>→</b><span>Telemetry</span>
+        </div>
+
         <ol class="architecture-list">
-          <li>Camera input streams from the robot or simulator.</li>
-          <li>AI model performs image classification and object detection.</li>
-          <li>Azure-style cloud services store telemetry, metrics, and alerts.</li>
-          <li>The dashboard presents live status, confidence, and automation results.</li>
+          <li>Capture frames from a webcam or local video.</li>
+          <li>Run object detection with a browser-loaded COCO-SSD model.</li>
+          <li>Match detections between frames using centroid distance.</li>
+          <li>Expose latency, FPS, confidence, object count, and simulated robot telemetry.</li>
         </ol>
 
         <div class="tip-box">
-          <strong>Next step:</strong> connect this prototype to a real camera stream, Azure Blob Storage, and an inference API.
+          <strong>Engineering note:</strong> this demo uses real browser-side inference. Robot telemetry is intentionally simulated; the README documents the boundary between real perception and simulated robotics data.
         </div>
       </section>
     </main>
+
+    <footer class="footer">
+      <span>Robot Vision System • Portfolio project</span>
+      <span>Runs locally with a static server</span>
+    </footer>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3"></script>
   <script src="app.js"></script>
 </body>
 </html>
