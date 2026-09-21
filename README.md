@@ -1,4 +1,5 @@
 # Robot Vision System
+![Logo de ejemplo]
 
 A browser-based computer vision and robotics perception demo that turns camera/video input into **real object detections, lightweight tracking, performance metrics, and robot telemetry** in a live dashboard.
 
