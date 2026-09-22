@@ -1,30 +1,30 @@
-const video = document.getElementById('video');
-const overlay = document.getElementById('overlay');
-const ctx = overlay.getContext('2d');
-const cameraButton = document.getElementById('cameraButton');
-const videoInput = document.getElementById('videoInput');
-const stopButton = document.getElementById('stopButton');
-const snapshotButton = document.getElementById('snapshotButton');
-const emptyState = document.getElementById('emptyState');
-const feedStatus = document.getElementById('feedStatus');
-const systemStatus = document.getElementById('systemStatus');
-const modeLabel = document.getElementById('modeLabel');
-const inputChip = document.getElementById('inputChip');
-const modelStatus = document.getElementById('modelStatus');
-const detectionsList = document.getElementById('detectionsList');
-const commandLog = document.getElementById('commandLog');
-const latencyEl = document.getElementById('latency');
-const objectsEl = document.getElementById('objects');
-const trackedEl = document.getElementById('tracked');
-const fpsEl = document.getElementById('fps');
-const confidenceBar = document.getElementById('confidenceBar');
-const confidenceText = document.getElementById('confidenceText');
-const taskLabel = document.getElementById('taskLabel');
-const batteryEl = document.getElementById('battery');
-const odometryEl = document.getElementById('odometry');
-const networkEl = document.getElementById('network');
-const queueStatus = document.getElementById('queueStatus');
-const clockEl = document.getElementById('clock');
+const video = typeof document !== 'undefined' ? document.getElementById('video') : null;
+const overlay = typeof document !== 'undefined' ? document.getElementById('overlay') : null;
+const ctx = overlay ? overlay.getContext('2d') : null;
+const cameraButton = typeof document !== 'undefined' ? document.getElementById('cameraButton') : null;
+const videoInput = typeof document !== 'undefined' ? document.getElementById('videoInput') : null;
+const stopButton = typeof document !== 'undefined' ? document.getElementById('stopButton') : null;
+const snapshotButton = typeof document !== 'undefined' ? document.getElementById('snapshotButton') : null;
+const emptyState = typeof document !== 'undefined' ? document.getElementById('emptyState') : null;
+const feedStatus = typeof document !== 'undefined' ? document.getElementById('feedStatus') : null;
+const systemStatus = typeof document !== 'undefined' ? document.getElementById('systemStatus') : null;
+const modeLabel = typeof document !== 'undefined' ? document.getElementById('modeLabel') : null;
+const inputChip = typeof document !== 'undefined' ? document.getElementById('inputChip') : null;
+const modelStatus = typeof document !== 'undefined' ? document.getElementById('modelStatus') : null;
+const detectionsList = typeof document !== 'undefined' ? document.getElementById('detectionsList') : null;
+const commandLog = typeof document !== 'undefined' ? document.getElementById('commandLog') : null;
+const latencyEl = typeof document !== 'undefined' ? document.getElementById('latency') : null;
+const objectsEl = typeof document !== 'undefined' ? document.getElementById('objects') : null;
+const trackedEl = typeof document !== 'undefined' ? document.getElementById('tracked') : null;
+const fpsEl = typeof document !== 'undefined' ? document.getElementById('fps') : null;
+const confidenceBar = typeof document !== 'undefined' ? document.getElementById('confidenceBar') : null;
+const confidenceText = typeof document !== 'undefined' ? document.getElementById('confidenceText') : null;
+const taskLabel = typeof document !== 'undefined' ? document.getElementById('taskLabel') : null;
+const batteryEl = typeof document !== 'undefined' ? document.getElementById('battery') : null;
+const odometryEl = typeof document !== 'undefined' ? document.getElementById('odometry') : null;
+const networkEl = typeof document !== 'undefined' ? document.getElementById('network') : null;
+const queueStatus = typeof document !== 'undefined' ? document.getElementById('queueStatus') : null;
+const clockEl = typeof document !== 'undefined' ? document.getElementById('clock') : null;
 
 let model = null;
 let stream = null;
@@ -33,7 +33,7 @@ let running = false;
 let inferenceBusy = false;
 let lastInferenceTime = 0;
 let processedFrames = 0;
-let fpsWindowStart = performance.now();
+let fpsWindowStart = typeof performance !== 'undefined' ? performance.now() : 0;
 let currentFps = 0;
 let nextTrackId = 1;
 let tracks = [];
@@ -41,10 +41,12 @@ let logEntries = [];
 let odometry = 12.4;
 
 function updateClock() {
+  if (!clockEl) return;
   clockEl.textContent = new Date().toLocaleTimeString('en-GB');
 }
 
 function addLog(message) {
+  if (!commandLog) return;
   const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   logEntries.unshift(`${time} — ${message}`);
   logEntries = logEntries.slice(0, 6);
@@ -52,6 +54,7 @@ function addLog(message) {
 }
 
 function setStatus(status, mode, feed = 'Online') {
+  if (!systemStatus || !modeLabel || !feedStatus) return;
   systemStatus.textContent = status;
   modeLabel.textContent = mode;
   feedStatus.textContent = feed;
@@ -59,6 +62,7 @@ function setStatus(status, mode, feed = 'Online') {
 }
 
 function resizeCanvas() {
+  if (!video || !overlay) return;
   const width = video.videoWidth || video.clientWidth;
   const height = video.videoHeight || video.clientHeight;
   if (!width || !height) return;
@@ -66,11 +70,11 @@ function resizeCanvas() {
   overlay.height = height;
 }
 
-function getCentroid(box) {
+export function getCentroid(box) {
   return { x: box[0] + box[2] / 2, y: box[1] + box[3] / 2 };
 }
 
-function updateTracks(predictions) {
+export function updateTracks(predictions, existingTracks = tracks, initialNextTrackId = nextTrackId) {
   const candidates = predictions.map((prediction) => ({
     ...prediction,
     centroid: getCentroid(prediction.bbox),
@@ -78,10 +82,12 @@ function updateTracks(predictions) {
   }));
 
   const usedTracks = new Set();
+  let nextTrackIdValue = initialNextTrackId;
+
   candidates.forEach((candidate) => {
     let best = null;
     let bestDistance = Infinity;
-    tracks.forEach((track) => {
+    existingTracks.forEach((track) => {
       if (usedTracks.has(track.id) || track.className !== candidate.class) return;
       const distance = Math.hypot(candidate.centroid.x - track.x, candidate.centroid.y - track.y);
       if (distance < bestDistance && distance < 90) {
@@ -94,21 +100,27 @@ function updateTracks(predictions) {
       candidate.trackId = best.id;
       usedTracks.add(best.id);
     } else {
-      candidate.trackId = nextTrackId++;
+      candidate.trackId = nextTrackIdValue++;
     }
   });
 
-  tracks = candidates.map((candidate) => ({
+  const nextTracks = candidates.map((candidate) => ({
     id: candidate.trackId,
     className: candidate.class,
     x: candidate.centroid.x,
     y: candidate.centroid.y,
   }));
 
+  if (tracks === existingTracks) {
+    tracks = nextTracks;
+    nextTrackId = nextTrackIdValue;
+  }
+
   return candidates;
 }
 
 function drawPredictions(predictions) {
+  if (!video || !overlay || !ctx) return;
   resizeCanvas();
   ctx.clearRect(0, 0, overlay.width, overlay.height);
 
@@ -134,51 +146,62 @@ function renderInsights(predictions, latency) {
     ? Math.round((predictions.reduce((sum, item) => sum + item.score, 0) / predictions.length) * 100)
     : 0;
 
-  objectsEl.textContent = String(predictions.length);
-  trackedEl.textContent = String(new Set(predictions.map((item) => item.trackId)).size);
-  latencyEl.textContent = `${latency.toFixed(0)} ms`;
-  fpsEl.textContent = currentFps.toFixed(1);
-  confidenceBar.style.width = `${confidence}%`;
-  confidenceText.textContent = predictions.length
-    ? `${confidence}% average confidence across ${predictions.length} detection${predictions.length === 1 ? '' : 's'}.`
-    : 'No objects detected in the latest frame.';
+  if (objectsEl) objectsEl.textContent = String(predictions.length);
+  if (trackedEl) trackedEl.textContent = String(new Set(predictions.map((item) => item.trackId)).size);
+  if (latencyEl) latencyEl.textContent = `${latency.toFixed(0)} ms`;
+  if (fpsEl) fpsEl.textContent = currentFps.toFixed(1);
+  if (confidenceBar) confidenceBar.style.width = `${confidence}%`;
+  if (confidenceText) {
+    confidenceText.textContent = predictions.length
+      ? `${confidence}% average confidence across ${predictions.length} detection${predictions.length === 1 ? '' : 's'}.`
+      : 'No objects detected in the latest frame.';
+  }
 
-  detectionsList.innerHTML = predictions.length
-    ? predictions
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 8)
-        .map((item) => `<li><strong>${item.class}</strong> — ${(item.score * 100).toFixed(0)}% confidence · track #${item.trackId}</li>`)
-        .join('')
-    : '<li>No objects above the confidence threshold.</li>';
+  if (detectionsList) {
+    detectionsList.innerHTML = predictions.length
+      ? predictions
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 8)
+          .map((item) => `<li><strong>${item.class}</strong> — ${(item.score * 100).toFixed(0)}% confidence · track #${item.trackId}</li>`)
+          .join('')
+      : '<li>No objects above the confidence threshold.</li>';
+  }
 
-  taskLabel.textContent = predictions.length
-    ? `Tracking ${predictions.length} object${predictions.length === 1 ? '' : 's'} in the current scene.`
-    : 'Scanning the current scene for known objects.';
+  if (taskLabel) {
+    taskLabel.textContent = predictions.length
+      ? `Tracking ${predictions.length} object${predictions.length === 1 ? '' : 's'} in the current scene.`
+      : 'Scanning the current scene for known objects.';
+  }
 }
 
-function updateTelemetry() {
-  if (!running) return;
-  odometry += 0.02;
-  odometryEl.textContent = `${odometry.toFixed(1)} m`;
-  const battery = Math.max(82, 92 - Math.floor((odometry - 12.4) / 0.4));
-  batteryEl.textContent = `${battery}%`;
-  networkEl.textContent = 'Connected';
+export function updateTelemetry({ running: isRunning = running, odometryValue = odometry, odometryElRef = odometryEl, batteryElRef = batteryEl, networkElRef = networkEl } = {}) {
+  if (!isRunning) return;
+  const nextOdometry = odometryValue + 0.02;
+  if (odometryElRef) odometryElRef.textContent = `${nextOdometry.toFixed(1)} m`;
+  const battery = Math.max(82, 92 - Math.floor((nextOdometry - 12.4) / 0.4));
+  if (batteryElRef) batteryElRef.textContent = `${battery}%`;
+  if (networkElRef) networkElRef.textContent = 'Connected';
+  odometry = nextOdometry;
 }
 
 async function loadModel() {
   if (model) return model;
-  modelStatus.textContent = 'Loading model';
-  modelStatus.className = 'status-pill neutral';
+  if (modelStatus) {
+    modelStatus.textContent = 'Loading model';
+    modelStatus.className = 'status-pill neutral';
+  }
   addLog('Loading COCO-SSD object detection model.');
   model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
-  modelStatus.textContent = 'Model ready';
-  modelStatus.className = 'status-pill ready';
+  if (modelStatus) {
+    modelStatus.textContent = 'Model ready';
+    modelStatus.className = 'status-pill ready';
+  }
   addLog('COCO-SSD model loaded successfully.');
   return model;
 }
 
 async function processFrame(timestamp) {
-  if (!running) return;
+  if (!running || !video || !model) return;
   animationFrame = requestAnimationFrame(processFrame);
 
   if (inferenceBusy || video.readyState < 2) return;
@@ -204,12 +227,16 @@ async function processFrame(timestamp) {
     drawPredictions(tracked);
     renderInsights(tracked, latency);
     updateTelemetry();
-    modelStatus.textContent = 'Inference active';
-    modelStatus.className = 'status-pill online';
+    if (modelStatus) {
+      modelStatus.textContent = 'Inference active';
+      modelStatus.className = 'status-pill online';
+    }
   } catch (error) {
     addLog(`Inference error: ${error.message}`);
-    modelStatus.textContent = 'Inference error';
-    modelStatus.className = 'status-pill neutral';
+    if (modelStatus) {
+      modelStatus.textContent = 'Inference error';
+      modelStatus.className = 'status-pill neutral';
+    }
   } finally {
     inferenceBusy = false;
   }
@@ -219,15 +246,16 @@ async function startCamera() {
   stopPipeline(false);
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    if (!video) return;
     video.srcObject = stream;
     video.removeAttribute('controls');
-    inputChip.textContent = 'Input: Webcam';
+    if (inputChip) inputChip.textContent = 'Input: Webcam';
     setStatus('Running', 'Webcam • Real-time inference');
-    emptyState.hidden = true;
+    if (emptyState) emptyState.hidden = true;
     running = true;
-    stopButton.disabled = false;
-    snapshotButton.disabled = false;
-    queueStatus.textContent = 'Processing';
+    if (stopButton) stopButton.disabled = false;
+    if (snapshotButton) snapshotButton.disabled = false;
+    if (queueStatus) queueStatus.textContent = 'Processing';
     addLog('Webcam stream started.');
     await video.play();
     resizeCanvas();
@@ -241,17 +269,18 @@ async function startCamera() {
 
 async function loadVideo(file) {
   stopPipeline(false);
+  if (!video) return;
   const url = URL.createObjectURL(file);
   video.srcObject = null;
   video.src = url;
   video.controls = true;
-  inputChip.textContent = 'Input: Local video';
+  if (inputChip) inputChip.textContent = 'Input: Local video';
   setStatus('Running', 'Local video • Real-time inference');
-  emptyState.hidden = true;
+  if (emptyState) emptyState.hidden = true;
   running = true;
-  stopButton.disabled = false;
-  snapshotButton.disabled = false;
-  queueStatus.textContent = 'Processing';
+  if (stopButton) stopButton.disabled = false;
+  if (snapshotButton) snapshotButton.disabled = false;
+  if (queueStatus) queueStatus.textContent = 'Processing';
   addLog(`Loaded video: ${file.name}.`);
 
   video.onloadedmetadata = async () => {
@@ -271,27 +300,29 @@ function stopPipeline(log = true) {
     stream.getTracks().forEach((track) => track.stop());
     stream = null;
   }
-  if (video.srcObject) video.srcObject = null;
-  video.pause();
-  ctx.clearRect(0, 0, overlay.width, overlay.height);
+  if (video && video.srcObject) video.srcObject = null;
+  if (video) video.pause();
+  if (ctx && overlay) ctx.clearRect(0, 0, overlay.width, overlay.height);
   tracks = [];
-  trackedEl.textContent = '0';
-  fpsEl.textContent = '0';
-  queueStatus.textContent = 'Ready';
+  if (trackedEl) trackedEl.textContent = '0';
+  if (fpsEl) fpsEl.textContent = '0';
+  if (queueStatus) queueStatus.textContent = 'Ready';
   setStatus('Ready', 'Awaiting video input', 'Offline');
-  inputChip.textContent = 'Input: None';
-  modelStatus.textContent = model ? 'Model ready' : 'Model idle';
-  modelStatus.className = `status-pill ${model ? 'ready' : 'neutral'}`;
-  stopButton.disabled = true;
-  snapshotButton.disabled = true;
-  emptyState.hidden = false;
-  taskLabel.textContent = 'Waiting for perception input.';
-  networkEl.textContent = 'Ready';
+  if (inputChip) inputChip.textContent = 'Input: None';
+  if (modelStatus) {
+    modelStatus.textContent = model ? 'Model ready' : 'Model idle';
+    modelStatus.className = `status-pill ${model ? 'ready' : 'neutral'}`;
+  }
+  if (stopButton) stopButton.disabled = true;
+  if (snapshotButton) snapshotButton.disabled = true;
+  if (emptyState) emptyState.hidden = false;
+  if (taskLabel) taskLabel.textContent = 'Waiting for perception input.';
+  if (networkEl) networkEl.textContent = 'Ready';
   if (log) addLog('Vision pipeline stopped.');
 }
 
 function captureSnapshot() {
-  if (!video.videoWidth) return;
+  if (!video || !video.videoWidth) return;
   const canvas = document.createElement('canvas');
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
@@ -303,16 +334,18 @@ function captureSnapshot() {
   addLog('Captured current camera frame.');
 }
 
-cameraButton.addEventListener('click', startCamera);
-videoInput.addEventListener('change', (event) => {
-  const [file] = event.target.files;
-  if (file) loadVideo(file);
-});
-stopButton.addEventListener('click', () => stopPipeline(true));
-snapshotButton.addEventListener('click', captureSnapshot);
-video.addEventListener('resize', resizeCanvas);
-video.addEventListener('ended', () => stopPipeline(true));
+if (typeof document !== 'undefined') {
+  cameraButton.addEventListener('click', startCamera);
+  videoInput.addEventListener('change', (event) => {
+    const [file] = event.target.files;
+    if (file) loadVideo(file);
+  });
+  stopButton.addEventListener('click', () => stopPipeline(true));
+  snapshotButton.addEventListener('click', captureSnapshot);
+  video.addEventListener('resize', resizeCanvas);
+  video.addEventListener('ended', () => stopPipeline(true));
 
-updateClock();
-setInterval(updateClock, 1000);
-addLog('System initialized.');
+  updateClock();
+  setInterval(updateClock, 1000);
+  addLog('System initialized.');
+}

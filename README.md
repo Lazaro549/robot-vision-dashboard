@@ -110,15 +110,42 @@ The UI records:
 
 The browser and hardware influence these values, so they are measured at runtime rather than hardcoded.
 
+## Testing and validation
+
+This project includes a small automated test suite for the tracking and telemetry logic using Vitest and jsdom.
+
+### Run locally
+
+```bash
+npm install
+npm test
+```
+
+### CI
+
+A GitHub Actions workflow runs the same test suite on push and pull request events:
+
+- `.github/workflows/test.yml`
+
+This ensures the dashboard logic remains stable as the project evolves.
+
 ## Project structure
 
 ```text
 robot-vision-dashboard-main/
-├── index.html
-├── app.js
-├── styles.css
-├── Logo.png
+├── .github/
+│   └── workflows/
+│       └── test.yml
 ├── Badges/
+├── app.js
+├── app.test.js
+├── BENCHMARK.md
+├── index.html
+├── logo.png
+├── package.json
+├── README.md
+├── styles.css
+├── vitest.config.js
 └── README.md
 ```
 
@@ -136,6 +163,16 @@ The current project deliberately stops at browser-side perception. A production 
 - CI tests for the inference and tracking pipeline
 
 These are future integrations, not features claimed as implemented in this repository.
+
+## 💸 Donations
+
+If you'd like to support this project:
+
+- 🇦🇷 ARS (Argentina)
+  Alias: `lazaro.503.alaba.mp`
+
+- 🌎 USD (Argentina only, local transfers)
+  Alias: `ahogada.duras.foca`
 
 ## License
 
