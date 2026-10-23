@@ -143,10 +143,10 @@ robot-vision-dashboard-main/
 ├── index.html
 ├── logo.png
 ├── package.json
+├── package-lock.json
 ├── README.md
 ├── styles.css
-├── vitest.config.js
-└── README.md
+└── vitest.config.js
 ```
 
 ## Future production architecture

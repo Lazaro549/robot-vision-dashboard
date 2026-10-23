@@ -25,6 +25,7 @@ const odometryEl = typeof document !== 'undefined' ? document.getElementById('od
 const networkEl = typeof document !== 'undefined' ? document.getElementById('network') : null;
 const queueStatus = typeof document !== 'undefined' ? document.getElementById('queueStatus') : null;
 const clockEl = typeof document !== 'undefined' ? document.getElementById('clock') : null;
+const avgConfidenceEl = typeof document !== 'undefined' ? document.getElementById('avgConfidence') : null;
 
 let model = null;
 let stream = null;
@@ -150,6 +151,7 @@ function renderInsights(predictions, latency) {
   if (trackedEl) trackedEl.textContent = String(new Set(predictions.map((item) => item.trackId)).size);
   if (latencyEl) latencyEl.textContent = `${latency.toFixed(0)} ms`;
   if (fpsEl) fpsEl.textContent = currentFps.toFixed(1);
+  if (avgConfidenceEl) avgConfidenceEl.textContent = predictions.length ? `${confidence}%` : '--%';
   if (confidenceBar) confidenceBar.style.width = `${confidence}%`;
   if (confidenceText) {
     confidenceText.textContent = predictions.length
@@ -306,6 +308,7 @@ function stopPipeline(log = true) {
   tracks = [];
   if (trackedEl) trackedEl.textContent = '0';
   if (fpsEl) fpsEl.textContent = '0';
+  if (avgConfidenceEl) avgConfidenceEl.textContent = '--%';
   if (queueStatus) queueStatus.textContent = 'Ready';
   setStatus('Ready', 'Awaiting video input', 'Offline');
   if (inputChip) inputChip.textContent = 'Input: None';

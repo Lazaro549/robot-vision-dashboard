@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Browser-based robot vision dashboard with real-time object detection, tracking, telemetry, and performance metrics." />
+  <meta name="theme-color" content="#04110b" />
+  <meta property="og:title" content="Robot Vision System" />
+  <meta property="og:description" content="Real-time object detection and tracking in the browser with TensorFlow.js COCO-SSD." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='%2322c55e' opacity='.15'/><circle cx='50' cy='50' r='24' fill='none' stroke='%2322c55e' stroke-width='6'/><circle cx='50' cy='50' r='8' fill='%234ade80'/></svg>" />
   <title>Robot Vision System | AI & Robotics</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -20,7 +24,7 @@
       </div>
       <div class="hero-badge">
         <span id="systemStatus">Ready</span>
-        <strong id="clock">--:--:--</strong>
+        <strong id="clock" aria-live="polite">--:--:--</strong>
         <small id="modeLabel">Awaiting video input</small>
       </div>
     </header>
@@ -59,6 +63,11 @@
         <p>Pipeline FPS</p>
         <h2 id="fps">0</h2>
         <span>Processed frames per second</span>
+      </article>
+      <article class="metric-card accent-cyan">
+        <p>Avg confidence</p>
+        <h2 id="avgConfidence">--%</h2>
+        <span>Mean score across detections</span>
       </article>
     </section>
 
@@ -166,12 +175,13 @@
 
     <footer class="footer">
       <span>Robot Vision System • Portfolio project</span>
+      <span>TensorFlow.js · COCO-SSD · Centroid Tracking</span>
       <span>Runs locally with a static server</span>
     </footer>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3"></script>
-  <script src="app.js"></script>
+  <script src="app.js" type="module"></script>
 </body>
 </html>
