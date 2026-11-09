@@ -157,7 +157,7 @@ button.secondary:not(:disabled):hover { background: rgba(134, 239, 172, 0.15); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 .camera-stage { min-height: 360px; padding: 0; background: #020807; }
 .camera-stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #020807; }
-.camera-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.camera-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .camera-stage .camera-overlay { position: absolute; top: 14px; left: 14px; right: 14px; }
 .empty-state { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 6px; color: var(--muted); background: radial-gradient(circle, rgba(74,222,128,.08), transparent 50%); z-index: 3; }
 .empty-state[hidden] { display: none; }
