@@ -1,2 +1,3 @@
 # Badges
-![Describe cloud computing](Describe cloud computing.png)
+Describe cloud computing
+![Describe cloud computing](Badges/describe cloud computing.png)
