@@ -300,6 +300,10 @@ function stopPipeline(log = true) {
   pipelineGeneration += 1;
   running = false;
   inferenceBusy = false;
+  processedFrames = 0;
+  currentFps = 0;
+  lastInferenceTime = 0;
+  fpsWindowStart = performance.now();
   if (animationFrame) cancelAnimationFrame(animationFrame);
   animationFrame = null;
   if (stream) {
