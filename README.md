@@ -129,6 +129,10 @@ A GitHub Actions workflow runs the same test suite on push and pull request even
 
 This ensures the dashboard logic remains stable as the project evolves.
 
+## Architecture notes
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the current pipeline boundaries, hardening changes, and a proposed ROS 2 integration architecture. The current browser application still uses simulated robot telemetry.
+
 ## Project structure
 
 ```text
