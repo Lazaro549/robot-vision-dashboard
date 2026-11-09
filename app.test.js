@@ -153,4 +153,27 @@ describe('robot vision dashboard logic', () => {
     expect(batteryEl.textContent).toContain('%');
     expect(networkEl.textContent).toBe('Connected');
   });
+  it('preserves a track through a short detection gap', async () => {
+    const { updateTracks } = await import('./app.js');
+    const first = updateTracks([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    updateTracks([]);
+    const recovered = updateTracks([{ class: 'person', bbox: [14, 22, 60, 100], score: 0.91 }]);
+    expect(recovered[0].trackId).toBe(first[0].trackId);
+  });
+
+  it('expires tracks after the configured missed-frame window', async () => {
+    const { updateTracks } = await import('./app.js');
+    const first = updateTracks([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    for (let i = 0; i < 3; i += 1) updateTracks([], undefined, undefined, { maxMissedFrames: 2 });
+    const recovered = updateTracks([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }], undefined, undefined, { maxMissedFrames: 2 });
+    expect(recovered[0].trackId).not.toBe(first[0].trackId);
+  });
+
+  it('does not associate detections across different classes', async () => {
+    const { updateTracks } = await import('./app.js');
+    const first = updateTracks([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    const next = updateTracks([{ class: 'car', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    expect(next[0].trackId).not.toBe(first[0].trackId);
+  });
+
 });
