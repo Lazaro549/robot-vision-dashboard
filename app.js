@@ -196,6 +196,7 @@ async function loadModel() {
 
 async function processFrame(timestamp) {
   if (!running || !video || !model) return;
+  const generation = pipelineGeneration;
   animationFrame = requestAnimationFrame(processFrame);
 
   if (inferenceBusy || video.readyState < 2) return;
@@ -207,6 +208,7 @@ async function processFrame(timestamp) {
 
   try {
     const predictions = await model.detect(video, 20, 0.55);
+    if (!running || generation !== pipelineGeneration) return;
     const tracked = updateTracks(predictions);
     const latency = performance.now() - started;
     processedFrames += 1;
@@ -240,9 +242,10 @@ function releaseVideoUrl() { if (currentVideoUrl) { URL.revokeObjectURL(currentV
 
 async function startCamera() {
   stopPipeline(false);
+  const generation = pipelineGeneration;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
-    if (!video) return;
+    if (!video || generation !== pipelineGeneration) { stream.getTracks().forEach((track) => track.stop()); stream = null; return; }
     video.srcObject = stream;
     video.removeAttribute('controls');
     if (inputChip) inputChip.textContent = 'Input: Webcam';
