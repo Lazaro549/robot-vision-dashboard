@@ -30,6 +30,8 @@ const avgConfidenceEl = typeof document !== 'undefined' ? document.getElementByI
 let model = null;
 let stream = null;
 let animationFrame = null;
+let currentVideoUrl = null;
+let pipelineGeneration = 0;
 let running = false;
 let inferenceBusy = false;
 let lastInferenceTime = 0;
@@ -51,7 +53,8 @@ function addLog(message) {
   const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   logEntries.unshift(`${time} — ${message}`);
   logEntries = logEntries.slice(0, 6);
-  commandLog.innerHTML = logEntries.map((entry) => `<li>${entry}</li>`).join('');
+  commandLog.replaceChildren();
+  logEntries.forEach((entry) => { const li = document.createElement('li'); li.textContent = entry; commandLog.appendChild(li); });
 }
 
 function setStatus(status, mode, feed = 'Online') {
@@ -75,47 +78,34 @@ export function getCentroid(box) {
   return { x: box[0] + box[2] / 2, y: box[1] + box[3] / 2 };
 }
 
-export function updateTracks(predictions, existingTracks = tracks, initialNextTrackId = nextTrackId) {
+export function updateTracks(predictions, existingTracks = tracks, initialNextTrackId = nextTrackId, { maxDistance = 90, maxMissedFrames = 5 } = {}) {
   const candidates = predictions.map((prediction) => ({
     ...prediction,
     centroid: getCentroid(prediction.bbox),
     trackId: null,
   }));
 
-  const usedTracks = new Set();
   let nextTrackIdValue = initialNextTrackId;
-
-  candidates.forEach((candidate) => {
-    let best = null;
-    let bestDistance = Infinity;
-    existingTracks.forEach((track) => {
-      if (usedTracks.has(track.id) || track.className !== candidate.class) return;
-      const distance = Math.hypot(candidate.centroid.x - track.x, candidate.centroid.y - track.y);
-      if (distance < bestDistance && distance < 90) {
-        best = track;
-        bestDistance = distance;
-      }
-    });
-
-    if (best) {
-      candidate.trackId = best.id;
-      usedTracks.add(best.id);
-    } else {
-      candidate.trackId = nextTrackIdValue++;
-    }
-  });
-
-  const nextTracks = candidates.map((candidate) => ({
-    id: candidate.trackId,
-    className: candidate.class,
-    x: candidate.centroid.x,
-    y: candidate.centroid.y,
+  const pairs = [];
+  candidates.forEach((candidate, ci) => existingTracks.forEach((track, ti) => {
+    if (track.className !== candidate.class) return;
+    const distance = Math.hypot(candidate.centroid.x-track.x,candidate.centroid.y-track.y);
+    if (distance <= maxDistance) pairs.push({ci,ti,distance});
   }));
-
-  if (tracks === existingTracks) {
-    tracks = nextTracks;
-    nextTrackId = nextTrackIdValue;
-  }
+  pairs.sort((a,b)=>a.distance-b.distance);
+  const usedCandidates=new Set(), usedTracks=new Set();
+  pairs.forEach(({ci,ti})=>{
+    if(usedCandidates.has(ci)||usedTracks.has(ti))return;
+    candidates[ci].trackId=existingTracks[ti].id; usedCandidates.add(ci); usedTracks.add(ti);
+  });
+  candidates.forEach(c=>{if(c.trackId===null)c.trackId=nextTrackIdValue++;});
+  const nextTracks=candidates.map(c=>({id:c.trackId,className:c.class,x:c.centroid.x,y:c.centroid.y,missedFrames:0}));
+  existingTracks.forEach((track,index)=>{
+    if(usedTracks.has(index))return;
+    const missedFrames=(track.missedFrames||0)+1;
+    if(missedFrames<=maxMissedFrames)nextTracks.push({...track,missedFrames});
+  });
+  if(tracks===existingTracks){tracks=nextTracks;nextTrackId=nextTrackIdValue;}
 
   return candidates;
 }
@@ -160,13 +150,15 @@ function renderInsights(predictions, latency) {
   }
 
   if (detectionsList) {
-    detectionsList.innerHTML = predictions.length
-      ? predictions
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 8)
-          .map((item) => `<li><strong>${item.class}</strong> — ${(item.score * 100).toFixed(0)}% confidence · track #${item.trackId}</li>`)
-          .join('')
-      : '<li>No objects above the confidence threshold.</li>';
+    detectionsList.replaceChildren();
+    if (!predictions.length) {
+      const li = document.createElement('li'); li.textContent = 'No objects above the confidence threshold.'; detectionsList.appendChild(li);
+    } else {
+      predictions.slice().sort((a,b) => b.score-a.score).slice(0,8).forEach((item) => {
+        const li=document.createElement('li'); const strong=document.createElement('strong'); strong.textContent=item.class;
+        li.append(strong, document.createTextNode(` — ${(item.score*100).toFixed(0)}% confidence · track #${item.trackId}`)); detectionsList.appendChild(li);
+      });
+    }
   }
 
   if (taskLabel) {
@@ -244,6 +236,8 @@ async function processFrame(timestamp) {
   }
 }
 
+function releaseVideoUrl() { if (currentVideoUrl) { URL.revokeObjectURL(currentVideoUrl); currentVideoUrl = null; } }
+
 async function startCamera() {
   stopPipeline(false);
   try {
@@ -264,17 +258,21 @@ async function startCamera() {
     await loadModel();
     animationFrame = requestAnimationFrame(processFrame);
   } catch (error) {
+    stopPipeline(false);
     addLog(`Camera unavailable: ${error.message}`);
     setStatus('Ready', 'Camera permission required', 'Offline');
   }
 }
 
 async function loadVideo(file) {
+  if (!file || !file.type.startsWith('video/')) { addLog('Invalid input: select a video file.'); return; }
   stopPipeline(false);
   if (!video) return;
-  const url = URL.createObjectURL(file);
+  releaseVideoUrl();
+  currentVideoUrl = URL.createObjectURL(file);
+  const generation = pipelineGeneration;
   video.srcObject = null;
-  video.src = url;
+  video.src = currentVideoUrl;
   video.controls = true;
   if (inputChip) inputChip.textContent = 'Input: Local video';
   setStatus('Running', 'Local video • Real-time inference');
@@ -286,14 +284,17 @@ async function loadVideo(file) {
   addLog(`Loaded video: ${file.name}.`);
 
   video.onloadedmetadata = async () => {
-    resizeCanvas();
-    await video.play();
-    await loadModel();
-    animationFrame = requestAnimationFrame(processFrame);
+    try {
+      if (!running || generation !== pipelineGeneration) return;
+      resizeCanvas(); await video.play(); await loadModel();
+      if (running && generation === pipelineGeneration) animationFrame = requestAnimationFrame(processFrame);
+    } catch (error) { if (generation === pipelineGeneration) { stopPipeline(false); addLog(`Video playback failed: ${error.message}`); } }
   };
+  video.onerror = () => { if (generation === pipelineGeneration) { stopPipeline(false); addLog('Unable to decode the selected video file.'); } };
 }
 
 function stopPipeline(log = true) {
+  pipelineGeneration += 1;
   running = false;
   inferenceBusy = false;
   if (animationFrame) cancelAnimationFrame(animationFrame);
@@ -303,7 +304,8 @@ function stopPipeline(log = true) {
     stream = null;
   }
   if (video && video.srcObject) video.srcObject = null;
-  if (video) video.pause();
+  if (video) { video.pause(); video.onloadedmetadata = null; video.onerror = null; video.removeAttribute('src'); video.load(); }
+  releaseVideoUrl();
   if (ctx && overlay) ctx.clearRect(0, 0, overlay.width, overlay.height);
   tracks = [];
   if (trackedEl) trackedEl.textContent = '0';
@@ -338,15 +340,15 @@ function captureSnapshot() {
 }
 
 if (typeof document !== 'undefined') {
-  cameraButton.addEventListener('click', startCamera);
-  videoInput.addEventListener('change', (event) => {
+  cameraButton?.addEventListener('click', startCamera);
+  videoInput?.addEventListener('change', (event) => {
     const [file] = event.target.files;
     if (file) loadVideo(file);
   });
-  stopButton.addEventListener('click', () => stopPipeline(true));
-  snapshotButton.addEventListener('click', captureSnapshot);
-  video.addEventListener('resize', resizeCanvas);
-  video.addEventListener('ended', () => stopPipeline(true));
+  stopButton?.addEventListener('click', () => stopPipeline(true));
+  snapshotButton?.addEventListener('click', captureSnapshot);
+  video?.addEventListener('resize', resizeCanvas);
+  video?.addEventListener('ended', () => stopPipeline(true));
 
   updateClock();
   setInterval(updateClock, 1000);
