@@ -27,6 +27,14 @@ const queueStatus = typeof document !== 'undefined' ? document.getElementById('q
 const clockEl = typeof document !== 'undefined' ? document.getElementById('clock') : null;
 const avgConfidenceEl = typeof document !== 'undefined' ? document.getElementById('avgConfidence') : null;
 
+// AI Bridge controls
+const bridgeToggle = typeof document !== 'undefined' ? document.getElementById('bridgeToggle') : null;
+const bridgeUrlInput = typeof document !== 'undefined' ? document.getElementById('bridgeUrl') : null;
+const bridgeStatusEl = typeof document !== 'undefined' ? document.getElementById('bridgeStatus') : null;
+const decisionCommandEl = typeof document !== 'undefined' ? document.getElementById('decisionCommand') : null;
+const decisionReasoningEl = typeof document !== 'undefined' ? document.getElementById('decisionReasoning') : null;
+const decisionMetaEl = typeof document !== 'undefined' ? document.getElementById('decisionMeta') : null;
+
 let model = null;
 let stream = null;
 let animationFrame = null;
@@ -41,6 +49,13 @@ let tracks = [];
 let logEntries = [];
 let odometry = 12.4;
 
+// Bridge state
+let bridgeEnabled = false;
+let bridgeBusy = false;
+let lastBridgePost = 0;
+const BRIDGE_INTERVAL_MS = 1500;
+let lastTrackedPredictions = [];
+
 function updateClock() {
   if (!clockEl) return;
   clockEl.textContent = new Date().toLocaleTimeString('en-GB');
@@ -50,7 +65,7 @@ function addLog(message) {
   if (!commandLog) return;
   const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   logEntries.unshift(`${time} — ${message}`);
-  logEntries = logEntries.slice(0, 6);
+  logEntries = logEntries.slice(0, 8);
   commandLog.innerHTML = logEntries.map((entry) => `<li>${entry}</li>`).join('');
 }
 
@@ -60,6 +75,12 @@ function setStatus(status, mode, feed = 'Online') {
   modeLabel.textContent = mode;
   feedStatus.textContent = feed;
   feedStatus.className = `status-pill ${feed === 'Online' ? 'online' : 'neutral'}`;
+}
+
+function setBridgeStatus(text, kind = 'neutral') {
+  if (!bridgeStatusEl) return;
+  bridgeStatusEl.textContent = text;
+  bridgeStatusEl.className = `status-pill ${kind}`;
 }
 
 function resizeCanvas() {
@@ -186,6 +207,93 @@ export function updateTelemetry({ running: isRunning = running, odometryValue = 
   odometry = nextOdometry;
 }
 
+function buildScenePayload(predictions) {
+  const width = video?.videoWidth || 0;
+  const height = video?.videoHeight || 0;
+  const batteryText = batteryEl?.textContent || '90%';
+  const battery = parseInt(batteryText, 10) || 90;
+
+  return {
+    timestamp: new Date().toISOString(),
+    frame_id: `dash-${Date.now()}`,
+    frame_width: width || null,
+    frame_height: height || null,
+    detections: predictions.map((p) => {
+      const [x, y, w, h] = p.bbox;
+      return {
+        label: p.class,
+        confidence: Number(p.score.toFixed(3)),
+        bbox: [x, y, x + w, y + h],
+        track_id: p.trackId ?? null,
+      };
+    }),
+    robot_state: {
+      battery,
+      odometry_m: Number(odometry.toFixed(2)),
+      network: networkEl?.textContent || 'Connected',
+      source: 'robot-vision-dashboard',
+    },
+    environment: {
+      source: 'browser',
+      model: 'coco-ssd',
+      input: inputChip?.textContent || 'unknown',
+    },
+  };
+}
+
+function renderDecision(decision) {
+  if (decisionCommandEl) {
+    const params = decision.params && Object.keys(decision.params).length
+      ? ` ${JSON.stringify(decision.params)}`
+      : '';
+    decisionCommandEl.textContent = `${decision.command}${params}`;
+  }
+  if (decisionReasoningEl) {
+    decisionReasoningEl.textContent = decision.reasoning || '—';
+  }
+  if (decisionMetaEl) {
+    const conf = decision.confidence != null ? `${(decision.confidence * 100).toFixed(0)}%` : '—';
+    const lat = decision.total_latency_s != null ? `${decision.total_latency_s.toFixed(2)}s` : '—';
+    decisionMetaEl.textContent = `Confidence ${conf} · Latency ${lat} · ${decision.robot_success ? 'OK' : 'Fail'}`;
+  }
+}
+
+async function postToBridge(predictions) {
+  if (!bridgeEnabled || bridgeBusy || !bridgeUrlInput) return;
+  const now = performance.now();
+  if (now - lastBridgePost < BRIDGE_INTERVAL_MS) return;
+
+  const url = (bridgeUrlInput.value || '').trim();
+  if (!url) return;
+
+  bridgeBusy = true;
+  lastBridgePost = now;
+  setBridgeStatus('Sending…', 'neutral');
+
+  try {
+    const payload = buildScenePayload(predictions);
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const decision = await response.json();
+    renderDecision(decision);
+    setBridgeStatus('Linked', 'online');
+    addLog(`AI: ${decision.command} — ${decision.reasoning?.slice(0, 80) || ''}`);
+  } catch (error) {
+    setBridgeStatus('Offline', 'neutral');
+    addLog(`Bridge error: ${error.message}`);
+  } finally {
+    bridgeBusy = false;
+  }
+}
+
 async function loadModel() {
   if (model) return model;
   if (modelStatus) {
@@ -216,6 +324,7 @@ async function processFrame(timestamp) {
   try {
     const predictions = await model.detect(video, 20, 0.55);
     const tracked = updateTracks(predictions);
+    lastTrackedPredictions = tracked;
     const latency = performance.now() - started;
     processedFrames += 1;
 
@@ -233,6 +342,9 @@ async function processFrame(timestamp) {
       modelStatus.textContent = 'Inference active';
       modelStatus.className = 'status-pill online';
     }
+
+    // Stream scene to Bedrock robotics bridge when enabled
+    postToBridge(tracked);
   } catch (error) {
     addLog(`Inference error: ${error.message}`);
     if (modelStatus) {
@@ -306,6 +418,7 @@ function stopPipeline(log = true) {
   if (video) video.pause();
   if (ctx && overlay) ctx.clearRect(0, 0, overlay.width, overlay.height);
   tracks = [];
+  lastTrackedPredictions = [];
   if (trackedEl) trackedEl.textContent = '0';
   if (fpsEl) fpsEl.textContent = '0';
   if (avgConfidenceEl) avgConfidenceEl.textContent = '--%';
@@ -337,6 +450,19 @@ function captureSnapshot() {
   addLog('Captured current camera frame.');
 }
 
+function onBridgeToggle() {
+  bridgeEnabled = Boolean(bridgeToggle?.checked);
+  if (bridgeEnabled) {
+    setBridgeStatus('Ready', 'ready');
+    addLog('AI Bridge enabled — streaming detections to robotics demo.');
+    // Push current frame immediately if available
+    if (lastTrackedPredictions.length) postToBridge(lastTrackedPredictions);
+  } else {
+    setBridgeStatus('Off', 'neutral');
+    addLog('AI Bridge disabled.');
+  }
+}
+
 if (typeof document !== 'undefined') {
   cameraButton.addEventListener('click', startCamera);
   videoInput.addEventListener('change', (event) => {
@@ -348,7 +474,13 @@ if (typeof document !== 'undefined') {
   video.addEventListener('resize', resizeCanvas);
   video.addEventListener('ended', () => stopPipeline(true));
 
+  if (bridgeToggle) {
+    bridgeToggle.addEventListener('change', onBridgeToggle);
+    bridgeEnabled = bridgeToggle.checked;
+  }
+
   updateClock();
   setInterval(updateClock, 1000);
   addLog('System initialized.');
+  setBridgeStatus('Off', 'neutral');
 }

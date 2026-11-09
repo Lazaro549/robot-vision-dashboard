@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Browser-based robot vision dashboard with real-time object detection, tracking, telemetry, and performance metrics." />
+  <meta name="description" content="Browser-based robot vision dashboard with real-time object detection, tracking, telemetry, and AI robot decisions via aws-bedrock-robotics-demo." />
   <meta name="theme-color" content="#04110b" />
   <meta property="og:title" content="Robot Vision System" />
-  <meta property="og:description" content="Real-time object detection and tracking in the browser with TensorFlow.js COCO-SSD." />
+  <meta property="og:description" content="Real-time object detection and tracking in the browser with TensorFlow.js COCO-SSD + Bedrock robot reasoning." />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='%2322c55e' opacity='.15'/><circle cx='50' cy='50' r='24' fill='none' stroke='%2322c55e' stroke-width='6'/><circle cx='50' cy='50' r='8' fill='%234ade80'/></svg>" />
   <title>Robot Vision System | AI & Robotics</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -20,7 +20,7 @@
       <div>
         <p class="eyebrow">AI & Robotics • Computer Vision</p>
         <h1>Robot Vision System</h1>
-        <p class="subtitle">A reproducible perception demo: camera or video input → object detection → lightweight tracking → robot telemetry → live dashboard.</p>
+        <p class="subtitle">Camera or video → COCO-SSD detection → tracking → optional AI bridge to Amazon Bedrock robot reasoning.</p>
       </div>
       <div class="hero-badge">
         <span id="systemStatus">Ready</span>
@@ -33,13 +33,29 @@
       <div class="control-copy">
         <p class="panel-label">Perception input</p>
         <h3>Run the vision pipeline</h3>
-        <p>Use your webcam or load a local video. Detection runs in the browser with COCO-SSD; no API key is required.</p>
+        <p>Use your webcam or load a local video. Detection runs in the browser with COCO-SSD. Enable the AI Bridge to stream scenes to <code>aws-bedrock-robotics-demo</code>.</p>
       </div>
       <div class="controls">
         <button id="cameraButton" type="button">Start camera</button>
         <label class="file-button" for="videoInput">Load video</label>
         <input id="videoInput" type="file" accept="video/*" hidden />
         <button id="stopButton" type="button" class="secondary" disabled>Stop</button>
+      </div>
+    </section>
+
+    <section class="bridge-bar panel">
+      <div class="bridge-copy">
+        <p class="panel-label">AI Bridge</p>
+        <h3>Vision → Bedrock robotics demo</h3>
+        <p>Posts detections every ~1.5s to the local bridge server. Start it with <code>python -m src.bridge_server</code> in the robotics demo repo.</p>
+      </div>
+      <div class="bridge-controls">
+        <label class="toggle">
+          <input id="bridgeToggle" type="checkbox" />
+          <span>Enable bridge</span>
+        </label>
+        <input id="bridgeUrl" type="url" value="http://127.0.0.1:8787/scene" spellcheck="false" />
+        <span id="bridgeStatus" class="status-pill neutral">Off</span>
       </div>
     </section>
 
@@ -124,6 +140,13 @@
           <p id="confidenceText">Run the pipeline to calculate confidence.</p>
         </div>
 
+        <div class="mini-card decision-card">
+          <strong>AI robot decision</strong>
+          <p id="decisionCommand" class="decision-command">—</p>
+          <p id="decisionReasoning" class="decision-reasoning">Enable the AI Bridge and run the vision pipeline to receive commands from aws-bedrock-robotics-demo.</p>
+          <p id="decisionMeta" class="decision-meta">Confidence — · Latency —</p>
+        </div>
+
         <div class="mini-card">
           <strong>Robot telemetry</strong>
           <ul class="health-list">
@@ -152,30 +175,30 @@
         <div class="panel-header">
           <div>
             <p class="panel-label">Architecture</p>
-            <h3>Perception pipeline</h3>
+            <h3>Perception + reasoning pipeline</h3>
           </div>
         </div>
 
         <div class="pipeline" aria-label="Vision pipeline">
-          <span>Camera / Video</span><b>→</b><span>Preprocess</span><b>→</b><span>COCO-SSD</span><b>→</b><span>Tracking</span><b>→</b><span>Telemetry</span>
+          <span>Camera / Video</span><b>→</b><span>COCO-SSD</span><b>→</b><span>Tracking</span><b>→</b><span>Bridge</span><b>→</b><span>Bedrock / Mock</span><b>→</b><span>Robot cmd</span>
         </div>
 
         <ol class="architecture-list">
           <li>Capture frames from a webcam or local video.</li>
           <li>Run object detection with a browser-loaded COCO-SSD model.</li>
           <li>Match detections between frames using centroid distance.</li>
-          <li>Expose latency, FPS, confidence, object count, and simulated robot telemetry.</li>
+          <li>Optionally stream scenes to <code>aws-bedrock-robotics-demo</code> for LLM robot decisions.</li>
         </ol>
 
         <div class="tip-box">
-          <strong>Engineering note:</strong> this demo uses real browser-side inference. Robot telemetry is intentionally simulated; the README documents the boundary between real perception and simulated robotics data.
+          <strong>Engineering note:</strong> perception is real (browser TF.js). Robot telemetry remains simulated. When the AI Bridge is on, decisions come from the local Python bridge (mock or Amazon Bedrock Claude).
         </div>
       </section>
     </main>
 
     <footer class="footer">
       <span>Robot Vision System • Portfolio project</span>
-      <span>TensorFlow.js · COCO-SSD · Centroid Tracking</span>
+      <span>TensorFlow.js · COCO-SSD · Bedrock bridge</span>
       <span>Runs locally with a static server</span>
     </footer>
   </div>
