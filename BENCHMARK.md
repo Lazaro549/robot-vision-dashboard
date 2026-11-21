@@ -27,7 +27,7 @@ The assessment covers the following components:
 - Webcam input or local video playback
 - COCO-SSD inference using the MobileNet v2 base model
 - Confidence filtering at 0.55
-- Centroid-based track association across consecutive frames
+- Class-aware IoU + centroid association across consecutive frames
 - Live metric updates shown in the dashboard
 - Simulated robot status updates for battery, odometry, and network state
 
@@ -78,8 +78,12 @@ http://127.0.0.1:8000/
 ### 4. Stress and edge checks
 
 - Increase scene complexity with multiple objects.
-- Add partial occlusion or motion blur.
+- Add brief missed detections, partial occlusion, or motion blur.
 - Confirm the tracker remains stable and the UI still responds.
+
+## Tracking configuration
+
+The current lightweight tracker associates detections of the same class using a weighted cost from centroid distance and bounding-box IoU. It retains a missing track for up to five processed frames. A recovered object may keep its ID during a short detector gap; longer gaps create a new ID. This is a heuristic baseline and is not expected to resolve difficult crossings or long occlusions.
 
 ## Metrics to Capture
 

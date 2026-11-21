@@ -192,6 +192,20 @@ describe('CentroidTracker', () => {
     const next = tracker.update([{ class: 'car', bbox: [10, 20, 60, 100], score: 0.9 }]);
     expect(next[0].trackId).not.toBe(first[0].trackId);
   });
+  it('keeps identities when same-class detections arrive in a different order', () => {
+    const tracker = new CentroidTracker();
+    const first = tracker.update([
+      { class: 'person', bbox: [0, 0, 40, 80], score: 0.9 },
+      { class: 'person', bbox: [200, 0, 40, 80], score: 0.9 },
+    ]);
+    const second = tracker.update([
+      { class: 'person', bbox: [202, 0, 40, 80], score: 0.9 },
+      { class: 'person', bbox: [2, 0, 40, 80], score: 0.9 },
+    ]);
+    expect(second[0].trackId).toBe(first[1].trackId);
+    expect(second[1].trackId).toBe(first[0].trackId);
+  });
+
   it('resets tracks and IDs', () => {
     const tracker = new CentroidTracker();
     tracker.update([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);

@@ -92,7 +92,7 @@ Integration details: [aws-bedrock-robotics-demo/docs/integration-dashboard.md](h
 ## Testing
 
 ```bash
-npm install
+npm ci
 npm test
 ```
 
