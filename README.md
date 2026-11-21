@@ -18,12 +18,14 @@ A browser-based computer vision and robotics perception demo that turns camera/v
 
 ## Architecture
 
+Pipeline FPS is the rate of successfully processed inference frames, not the camera's native capture FPS. Inference latency measures the model call, not the full capture-to-display path.
+
 ```
 [ Webcam / Local Video ]
          ↓
    COCO-SSD (browser)
          ↓
-   Centroid tracking + metrics
+   IoU + centroid tracking + metrics
          ↓
    Optional POST /scene  ──→  aws-bedrock-robotics-demo bridge
                                     ↓
@@ -49,7 +51,7 @@ Use HTTPS bridge endpoints, or HTTP endpoints on loopback (`localhost`, `127.0.0
 | Webcam / local video input | **Real** |
 | Object detection | **Real** |
 | Detection confidence | **Real model output** |
-| Centroid tracking | **Real browser-side algorithm** |
+| IoU + centroid tracking | **Real browser-side algorithm** |
 | Latency / FPS measurement | **Real** |
 | Robot battery / odometry | Simulated |
 | Robot commands (with bridge) | From Python bridge (mock or Bedrock) |

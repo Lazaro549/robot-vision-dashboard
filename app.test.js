@@ -33,7 +33,7 @@ function loadAppDom() {
             </div>
             <div class="camera-overlay">
               <span class="chip">Model: COCO-SSD</span>
-              <span class="chip">Tracking: Centroid</span>
+              <span class="chip">Tracking: IoU + Centroid</span>
               <span id="inputChip" class="chip">Input: None</span>
             </div>
           </div>

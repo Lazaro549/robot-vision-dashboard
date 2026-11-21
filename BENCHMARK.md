@@ -2,7 +2,7 @@
 
 ## Overview
 
-This benchmark evaluates the browser-based Robot Vision System demo built with TensorFlow.js, COCO-SSD, lightweight centroid tracking, and simulated robot telemetry. The goal is to measure how the live perception pipeline behaves under realistic usage conditions for a portfolio or demo environment.
+This benchmark evaluates the browser-based Robot Vision System demo built with TensorFlow.js, COCO-SSD, lightweight IoU + centroid tracking, and simulated robot telemetry. The goal is to measure how the live perception pipeline behaves under realistic usage conditions for a portfolio or demo environment.
 
 This project is intentionally structured as a demonstrator:
 
@@ -90,9 +90,9 @@ The current lightweight tracker associates detections of the same class using a 
 | Metric | Description | Typical target range |
 |---|---|---|
 | Inference latency | Time spent running detection per processed frame | 50–250 ms depending on browser and hardware |
-| Pipeline FPS | Number of processed frames per second | 5–15 FPS for real-time browser inference |
+| Pipeline FPS | Successfully processed inference frames per second (not camera capture FPS) | 5–15 FPS for real-time browser inference |
 | Objects detected | Count of predictions passing confidence threshold | Varies with scene |
-| Tracked objects | Number of active centroid-based tracks | Varies with scene |
+| Tracked objects | Detections assigned a track ID in the latest processed frame | Varies with scene |
 | Average confidence | Mean confidence for current detections | 0–100% |
 | UI responsiveness | Dashboard updates without lag or freezes | Real-time updates |
 
@@ -104,7 +104,7 @@ The system is considered benchmark-healthy when all of the following are true:
 - Inference latency remains within a usable interactive range for the device.
 - FPS updates continuously during live processing.
 - Detection overlays render on the correct video frame.
-- Tracking IDs remain consistent for objects that stay in frame.
+- Tracking IDs remain consistent during normal motion and brief missed detections.
 - Dashboard cards update without stale values.
 - The app can be stopped and restarted cleanly.
 
@@ -159,4 +159,4 @@ For simple reporting, include:
 
 ## Summary
 
-This benchmark validates the project’s intended claim: the dashboard demonstrates real-time browser-side computer vision and lightweight tracking in a portfolio-friendly environment. It is designed to demonstrate feasibility and system behavior, not to replace a full industrial robot perception evaluation.
+This benchmark validates the project’s intended claim: the dashboard demonstrates browser-side computer vision and lightweight tracking in a portfolio-friendly environment. Report measured results from your own device; the target ranges are guidance, not guaranteed performance. It is designed to demonstrate feasibility and system behavior, not to replace a full industrial robot perception evaluation.
