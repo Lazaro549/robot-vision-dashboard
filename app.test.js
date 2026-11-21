@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { CentroidTracker } from './tracker.js';
 
 function loadAppDom() {
   document.body.innerHTML = `
@@ -152,5 +153,41 @@ describe('robot vision dashboard logic', () => {
     expect(odometryEl.textContent).toContain('m');
     expect(batteryEl.textContent).toContain('%');
     expect(networkEl.textContent).toBe('Connected');
+  });
+});
+
+describe('CentroidTracker', () => {
+  it('keeps an ID when an object moves within the association threshold', () => {
+    const tracker = new CentroidTracker();
+    const first = tracker.update([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    const second = tracker.update([{ class: 'person', bbox: [20, 25, 60, 100], score: 0.88 }]);
+    expect(second[0].trackId).toBe(first[0].trackId);
+  });
+  it('preserves a track across a short missed-detection gap', () => {
+    const tracker = new CentroidTracker({ maxDisappeared: 2 });
+    const first = tracker.update([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    tracker.update([]);
+    const recovered = tracker.update([{ class: 'person', bbox: [12, 20, 60, 100], score: 0.9 }]);
+    expect(recovered[0].trackId).toBe(first[0].trackId);
+  });
+  it('assigns a new ID after the disappearance limit is exceeded', () => {
+    const tracker = new CentroidTracker({ maxDisappeared: 1 });
+    const first = tracker.update([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    tracker.update([]); tracker.update([]);
+    const next = tracker.update([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    expect(next[0].trackId).not.toBe(first[0].trackId);
+  });
+  it('does not associate detections from different classes', () => {
+    const tracker = new CentroidTracker();
+    const first = tracker.update([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    const next = tracker.update([{ class: 'car', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    expect(next[0].trackId).not.toBe(first[0].trackId);
+  });
+  it('resets tracks and IDs', () => {
+    const tracker = new CentroidTracker();
+    tracker.update([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    tracker.reset();
+    const next = tracker.update([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    expect(next[0].trackId).toBe(1);
   });
 });

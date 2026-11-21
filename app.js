@@ -1,3 +1,5 @@
+import { CentroidTracker } from './tracker.js';
+
 const video = typeof document !== 'undefined' ? document.getElementById('video') : null;
 const overlay = typeof document !== 'undefined' ? document.getElementById('overlay') : null;
 const ctx = overlay ? overlay.getContext('2d') : null;
@@ -44,8 +46,8 @@ let lastInferenceTime = 0;
 let processedFrames = 0;
 let fpsWindowStart = typeof performance !== 'undefined' ? performance.now() : 0;
 let currentFps = 0;
-let nextTrackId = 1;
-let tracks = [];
+const tracker = new CentroidTracker();
+let videoObjectUrl = null;
 let logEntries = [];
 let odometry = 12.4;
 
@@ -61,12 +63,17 @@ function updateClock() {
   clockEl.textContent = new Date().toLocaleTimeString('en-GB');
 }
 
-function addLog(message) {
+export function addLog(message) {
   if (!commandLog) return;
   const time = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  logEntries.unshift(`${time} — ${message}`);
+  logEntries.unshift(`${time} — ${String(message)}`);
   logEntries = logEntries.slice(0, 8);
-  commandLog.innerHTML = logEntries.map((entry) => `<li>${entry}</li>`).join('');
+  commandLog.replaceChildren();
+  logEntries.forEach((entry) => {
+    const item = document.createElement('li');
+    item.textContent = entry;
+    commandLog.appendChild(item);
+  });
 }
 
 function setStatus(status, mode, feed = 'Online') {
@@ -92,53 +99,8 @@ function resizeCanvas() {
   overlay.height = height;
 }
 
-export function getCentroid(box) {
-  return { x: box[0] + box[2] / 2, y: box[1] + box[3] / 2 };
-}
-
-export function updateTracks(predictions, existingTracks = tracks, initialNextTrackId = nextTrackId) {
-  const candidates = predictions.map((prediction) => ({
-    ...prediction,
-    centroid: getCentroid(prediction.bbox),
-    trackId: null,
-  }));
-
-  const usedTracks = new Set();
-  let nextTrackIdValue = initialNextTrackId;
-
-  candidates.forEach((candidate) => {
-    let best = null;
-    let bestDistance = Infinity;
-    existingTracks.forEach((track) => {
-      if (usedTracks.has(track.id) || track.className !== candidate.class) return;
-      const distance = Math.hypot(candidate.centroid.x - track.x, candidate.centroid.y - track.y);
-      if (distance < bestDistance && distance < 90) {
-        best = track;
-        bestDistance = distance;
-      }
-    });
-
-    if (best) {
-      candidate.trackId = best.id;
-      usedTracks.add(best.id);
-    } else {
-      candidate.trackId = nextTrackIdValue++;
-    }
-  });
-
-  const nextTracks = candidates.map((candidate) => ({
-    id: candidate.trackId,
-    className: candidate.class,
-    x: candidate.centroid.x,
-    y: candidate.centroid.y,
-  }));
-
-  if (tracks === existingTracks) {
-    tracks = nextTracks;
-    nextTrackId = nextTrackIdValue;
-  }
-
-  return candidates;
+export function updateTracks(predictions) {
+  return tracker.update(predictions);
 }
 
 function drawPredictions(predictions) {
@@ -181,13 +143,21 @@ function renderInsights(predictions, latency) {
   }
 
   if (detectionsList) {
-    detectionsList.innerHTML = predictions.length
-      ? predictions
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 8)
-          .map((item) => `<li><strong>${item.class}</strong> — ${(item.score * 100).toFixed(0)}% confidence · track #${item.trackId}</li>`)
-          .join('')
-      : '<li>No objects above the confidence threshold.</li>';
+    detectionsList.replaceChildren();
+    const visiblePredictions = [...predictions].sort((a, b) => b.score - a.score).slice(0, 8);
+    if (!visiblePredictions.length) {
+      const item = document.createElement('li');
+      item.textContent = 'No objects above the confidence threshold.';
+      detectionsList.appendChild(item);
+    } else {
+      visiblePredictions.forEach((prediction) => {
+        const item = document.createElement('li');
+        const name = document.createElement('strong');
+        name.textContent = String(prediction.class);
+        item.append(name, document.createTextNode(` — ${(prediction.score * 100).toFixed(0)}% confidence · track #${prediction.trackId}`));
+        detectionsList.appendChild(item);
+      });
+    }
   }
 
   if (taskLabel) {
@@ -384,9 +354,13 @@ async function startCamera() {
 async function loadVideo(file) {
   stopPipeline(false);
   if (!video) return;
-  const url = URL.createObjectURL(file);
+  if (!file || (file.type && !file.type.startsWith('video/'))) {
+    addLog('Unsupported file: please select a video.');
+    return;
+  }
+  videoObjectUrl = URL.createObjectURL(file);
   video.srcObject = null;
-  video.src = url;
+  video.src = videoObjectUrl;
   video.controls = true;
   if (inputChip) inputChip.textContent = 'Input: Local video';
   setStatus('Running', 'Local video • Real-time inference');
@@ -416,8 +390,14 @@ function stopPipeline(log = true) {
   }
   if (video && video.srcObject) video.srcObject = null;
   if (video) video.pause();
+  if (video) { video.onloadedmetadata = null; video.onerror = null; }
+  if (videoObjectUrl) {
+    URL.revokeObjectURL(videoObjectUrl);
+    videoObjectUrl = null;
+    if (video) { video.removeAttribute('src'); video.load(); }
+  }
   if (ctx && overlay) ctx.clearRect(0, 0, overlay.width, overlay.height);
-  tracks = [];
+  tracker.reset();
   lastTrackedPredictions = [];
   if (trackedEl) trackedEl.textContent = '0';
   if (fpsEl) fpsEl.textContent = '0';
