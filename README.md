@@ -11,19 +11,21 @@ A browser-based computer vision and robotics perception demo that turns camera/v
 - Local video-file input for reproducible demos
 - Object detection with **TensorFlow.js + COCO-SSD**
 - Confidence thresholding and per-frame detections
-- Lightweight centroid-based object tracking across frames
+- Lightweight class-aware tracking using centroid distance + IoU, with a short missed-detection grace period
 - Inference latency / FPS / confidence metrics
 - Simulated robot battery, odometry, and network telemetry
 - **AI Bridge** — stream scenes to `aws-bedrock-robotics-demo` and display robot commands live
 
 ## Architecture
 
+Pipeline FPS is the rate of successfully processed inference frames, not the camera's native capture FPS. Inference latency measures the model call, not the full capture-to-display path.
+
 ```
 [ Webcam / Local Video ]
          ↓
    COCO-SSD (browser)
          ↓
-   Centroid tracking + metrics
+   IoU + centroid tracking + metrics
          ↓
    Optional POST /scene  ──→  aws-bedrock-robotics-demo bridge
                                     ↓
@@ -34,6 +36,14 @@ A browser-based computer vision and robotics perception demo that turns camera/v
                               Shown in dashboard
 ```
 
+### Tracking behavior and limitations
+
+The tracker associates same-class detections using bounding-box IoU and centroid distance. It retains unmatched tracks for up to five processed frames to tolerate brief detector misses. It is intentionally lightweight: it does not use a Kalman filter, appearance embeddings, camera-motion compensation, or global optimal assignment. IDs can still switch during crossings, long occlusions, or abrupt motion.
+
+### Bridge safety
+
+Use HTTPS bridge endpoints, or HTTP endpoints on loopback (`localhost`, `127.0.0.1`, `::1`). This browser-side demo bridge is not an authenticated production API. Do not expose an unauthenticated bridge server to a public network.
+
 ### Real vs simulated components
 
 | Component | Status |
@@ -41,7 +51,7 @@ A browser-based computer vision and robotics perception demo that turns camera/v
 | Webcam / local video input | **Real** |
 | Object detection | **Real** |
 | Detection confidence | **Real model output** |
-| Centroid tracking | **Real browser-side algorithm** |
+| IoU + centroid tracking | **Real browser-side algorithm** |
 | Latency / FPS measurement | **Real** |
 | Robot battery / odometry | Simulated |
 | Robot commands (with bridge) | From Python bridge (mock or Bedrock) |
@@ -84,7 +94,7 @@ Integration details: [aws-bedrock-robotics-demo/docs/integration-dashboard.md](h
 ## Testing
 
 ```bash
-npm install
+npm ci
 npm test
 ```
 

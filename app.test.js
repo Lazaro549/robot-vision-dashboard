@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { CentroidTracker } from './tracker.js';
 
 function loadAppDom() {
   document.body.innerHTML = `
@@ -32,7 +33,7 @@ function loadAppDom() {
             </div>
             <div class="camera-overlay">
               <span class="chip">Model: COCO-SSD</span>
-              <span class="chip">Tracking: Centroid</span>
+              <span class="chip">Tracking: IoU + Centroid</span>
               <span id="inputChip" class="chip">Input: None</span>
             </div>
           </div>
@@ -141,6 +142,15 @@ describe('robot vision dashboard logic', () => {
     expect(firstPass[0].trackId).toBe(secondPass[0].trackId);
   });
 
+  it('renders log messages as text instead of parsing HTML', async () => {
+    const { addLog } = await import('./app.js');
+    addLog('<img src=x onerror=alert(1)>');
+
+    const log = document.getElementById('commandLog');
+    expect(log.querySelector('img')).toBeNull();
+    expect(log.textContent).toContain('<img src=x');
+  });
+
   it('updates telemetry text when the pipeline runs', async () => {
     const { updateTelemetry } = await import('./app.js');
     const odometryEl = document.getElementById('odometry');
@@ -152,5 +162,55 @@ describe('robot vision dashboard logic', () => {
     expect(odometryEl.textContent).toContain('m');
     expect(batteryEl.textContent).toContain('%');
     expect(networkEl.textContent).toBe('Connected');
+  });
+});
+
+describe('CentroidTracker', () => {
+  it('keeps an ID when an object moves within the association threshold', () => {
+    const tracker = new CentroidTracker();
+    const first = tracker.update([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    const second = tracker.update([{ class: 'person', bbox: [20, 25, 60, 100], score: 0.88 }]);
+    expect(second[0].trackId).toBe(first[0].trackId);
+  });
+  it('preserves a track across a short missed-detection gap', () => {
+    const tracker = new CentroidTracker({ maxDisappeared: 2 });
+    const first = tracker.update([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    tracker.update([]);
+    const recovered = tracker.update([{ class: 'person', bbox: [12, 20, 60, 100], score: 0.9 }]);
+    expect(recovered[0].trackId).toBe(first[0].trackId);
+  });
+  it('assigns a new ID after the disappearance limit is exceeded', () => {
+    const tracker = new CentroidTracker({ maxDisappeared: 1 });
+    const first = tracker.update([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    tracker.update([]); tracker.update([]);
+    const next = tracker.update([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    expect(next[0].trackId).not.toBe(first[0].trackId);
+  });
+  it('does not associate detections from different classes', () => {
+    const tracker = new CentroidTracker();
+    const first = tracker.update([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    const next = tracker.update([{ class: 'car', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    expect(next[0].trackId).not.toBe(first[0].trackId);
+  });
+  it('keeps identities when same-class detections arrive in a different order', () => {
+    const tracker = new CentroidTracker();
+    const first = tracker.update([
+      { class: 'person', bbox: [0, 0, 40, 80], score: 0.9 },
+      { class: 'person', bbox: [200, 0, 40, 80], score: 0.9 },
+    ]);
+    const second = tracker.update([
+      { class: 'person', bbox: [202, 0, 40, 80], score: 0.9 },
+      { class: 'person', bbox: [2, 0, 40, 80], score: 0.9 },
+    ]);
+    expect(second[0].trackId).toBe(first[1].trackId);
+    expect(second[1].trackId).toBe(first[0].trackId);
+  });
+
+  it('resets tracks and IDs', () => {
+    const tracker = new CentroidTracker();
+    tracker.update([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    tracker.reset();
+    const next = tracker.update([{ class: 'person', bbox: [10, 20, 60, 100], score: 0.9 }]);
+    expect(next[0].trackId).toBe(1);
   });
 });
