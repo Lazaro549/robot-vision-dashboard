@@ -142,6 +142,15 @@ describe('robot vision dashboard logic', () => {
     expect(firstPass[0].trackId).toBe(secondPass[0].trackId);
   });
 
+  it('renders log messages as text instead of parsing HTML', async () => {
+    const { addLog } = await import('./app.js');
+    addLog('<img src=x onerror=alert(1)>');
+
+    const log = document.getElementById('commandLog');
+    expect(log.querySelector('img')).toBeNull();
+    expect(log.textContent).toContain('<img src=x');
+  });
+
   it('updates telemetry text when the pipeline runs', async () => {
     const { updateTelemetry } = await import('./app.js');
     const odometryEl = document.getElementById('odometry');

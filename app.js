@@ -42,6 +42,8 @@ let stream = null;
 let animationFrame = null;
 let running = false;
 let inferenceBusy = false;
+let pipelineGeneration = 0;
+let modelPromise = null;
 let lastInferenceTime = 0;
 let processedFrames = 0;
 let fpsWindowStart = typeof performance !== 'undefined' ? performance.now() : 0;
@@ -236,53 +238,83 @@ async function postToBridge(predictions) {
   const url = (bridgeUrlInput.value || '').trim();
   if (!url) return;
 
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+    const isLoopback = ['localhost', '127.0.0.1', '[::1]'].includes(parsedUrl.hostname);
+    const validProtocol = parsedUrl.protocol === 'https:'
+      || (parsedUrl.protocol === 'http:' && isLoopback);
+    if (!validProtocol || parsedUrl.username || parsedUrl.password) {
+      throw new Error('Use HTTPS or a local HTTP bridge URL without embedded credentials.');
+    }
+  } catch (error) {
+    setBridgeStatus('Invalid URL', 'neutral');
+    addLog('Bridge configuration error: ' + error.message);
+    return;
+  }
+
   bridgeBusy = true;
   lastBridgePost = now;
   setBridgeStatus('Sending…', 'neutral');
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
 
   try {
     const payload = buildScenePayload(predictions);
-    const response = await fetch(url, {
+    const response = await fetch(parsedUrl.toString(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error('HTTP ' + response.status);
 
     const decision = await response.json();
+    if (!decision || typeof decision !== 'object' || typeof decision.command !== 'string') {
+      throw new Error('Bridge returned an invalid decision payload.');
+    }
+
     renderDecision(decision);
     setBridgeStatus('Linked', 'online');
-    addLog(`AI: ${decision.command} — ${decision.reasoning?.slice(0, 80) || ''}`);
+    addLog('AI: ' + decision.command + ' — ' + String(decision.reasoning || '').slice(0, 80));
   } catch (error) {
+    const message = error.name === 'AbortError' ? 'Request timed out after 8 seconds.' : error.message;
     setBridgeStatus('Offline', 'neutral');
-    addLog(`Bridge error: ${error.message}`);
+    addLog('Bridge error: ' + message);
   } finally {
+    clearTimeout(timeoutId);
     bridgeBusy = false;
   }
 }
-
 async function loadModel() {
   if (model) return model;
+  if (modelPromise) return modelPromise;
+
   if (modelStatus) {
     modelStatus.textContent = 'Loading model';
     modelStatus.className = 'status-pill neutral';
   }
   addLog('Loading COCO-SSD object detection model.');
-  model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
-  if (modelStatus) {
-    modelStatus.textContent = 'Model ready';
-    modelStatus.className = 'status-pill ready';
-  }
-  addLog('COCO-SSD model loaded successfully.');
-  return model;
-}
 
-async function processFrame(timestamp) {
-  if (!running || !video || !model) return;
-  animationFrame = requestAnimationFrame(processFrame);
+  modelPromise = cocoSsd.load({ base: 'lite_mobilenet_v2' })
+    .then((loadedModel) => {
+      model = loadedModel;
+      if (modelStatus) {
+        modelStatus.textContent = 'Model ready';
+        modelStatus.className = 'status-pill ready';
+      }
+      addLog('COCO-SSD model loaded successfully.');
+      return model;
+    })
+    .finally(() => {
+      modelPromise = null;
+    });
+
+  return modelPromise;
+}
+async function processFrame(timestamp, generation = pipelineGeneration) {
+  if (!running || generation !== pipelineGeneration || !video || !model) return;
+  animationFrame = requestAnimationFrame((nextTimestamp) => processFrame(nextTimestamp, generation));
 
   if (inferenceBusy || video.readyState < 2) return;
   if (timestamp - lastInferenceTime < 120) return;
@@ -293,6 +325,7 @@ async function processFrame(timestamp) {
 
   try {
     const predictions = await model.detect(video, 20, 0.55);
+    if (!running || generation !== pipelineGeneration) return;
     const tracked = updateTracks(predictions);
     lastTrackedPredictions = tracked;
     const latency = performance.now() - started;
@@ -316,6 +349,7 @@ async function processFrame(timestamp) {
     // Stream scene to Bedrock robotics bridge when enabled
     postToBridge(tracked);
   } catch (error) {
+    if (generation !== pipelineGeneration) return;
     addLog(`Inference error: ${error.message}`);
     if (modelStatus) {
       modelStatus.textContent = 'Inference error';
@@ -328,9 +362,18 @@ async function processFrame(timestamp) {
 
 async function startCamera() {
   stopPipeline(false);
+  const generation = pipelineGeneration;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
-    if (!video) return;
+    if (!video) {
+      stream.getTracks().forEach((track) => track.stop());
+      stream = null;
+      return;
+    }
+    processedFrames = 0;
+    currentFps = 0;
+    lastInferenceTime = 0;
+    fpsWindowStart = performance.now();
     video.srcObject = stream;
     video.removeAttribute('controls');
     if (inputChip) inputChip.textContent = 'Input: Webcam';
@@ -344,8 +387,10 @@ async function startCamera() {
     await video.play();
     resizeCanvas();
     await loadModel();
-    animationFrame = requestAnimationFrame(processFrame);
+    if (!running || generation !== pipelineGeneration) return;
+    animationFrame = requestAnimationFrame((timestamp) => processFrame(timestamp, generation));
   } catch (error) {
+    stopPipeline(false);
     addLog(`Camera unavailable: ${error.message}`);
     setStatus('Ready', 'Camera permission required', 'Offline');
   }
@@ -359,6 +404,11 @@ async function loadVideo(file) {
     return;
   }
   videoObjectUrl = URL.createObjectURL(file);
+  const generation = pipelineGeneration;
+  processedFrames = 0;
+  currentFps = 0;
+  lastInferenceTime = 0;
+  fpsWindowStart = performance.now();
   video.srcObject = null;
   video.src = videoObjectUrl;
   video.controls = true;
@@ -372,16 +422,26 @@ async function loadVideo(file) {
   addLog(`Loaded video: ${file.name}.`);
 
   video.onloadedmetadata = async () => {
-    resizeCanvas();
-    await video.play();
-    await loadModel();
-    animationFrame = requestAnimationFrame(processFrame);
+    try {
+      resizeCanvas();
+      await video.play();
+      await loadModel();
+      if (!running || generation !== pipelineGeneration) return;
+      animationFrame = requestAnimationFrame((timestamp) => processFrame(timestamp, generation));
+    } catch (error) {
+      addLog('Video startup error: ' + error.message);
+      stopPipeline(false);
+    }
+  };
+  video.onerror = () => {
+    addLog('Unable to read the selected video file.');
+    stopPipeline(false);
   };
 }
 
 function stopPipeline(log = true) {
+  pipelineGeneration += 1;
   running = false;
-  inferenceBusy = false;
   if (animationFrame) cancelAnimationFrame(animationFrame);
   animationFrame = null;
   if (stream) {
