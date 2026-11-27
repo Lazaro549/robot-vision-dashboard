@@ -1,6 +1,6 @@
 # Robot Vision System
 ![Logo de ejemplo](logo.png)
-
+![](evidence2.png)
 A browser-based computer vision and robotics perception demo that turns camera/video input into **real object detections, lightweight tracking, performance metrics, and robot telemetry** in a live dashboard — with an optional **AI Bridge** to [aws-bedrock-robotics-demo](https://github.com/Lazaro549/aws-bedrock-robotics-demo) for LLM robot decisions.
 
 > **Portfolio goal:** demonstrate an end-to-end perception workflow. Computer vision inference is real; robot telemetry is simulated; robot *commands* can come from a local Python bridge (mock reasoner or Amazon Bedrock Claude).
